@@ -32,9 +32,13 @@ AWS Budgets, Cost Anomaly Detection, Config, CloudTrail, and Access Analyzer for
 | VPC Flow Logs parsing | Depth without an audience at this scale (no workload traffic). Future improvement. |
 | Database restore drill | Watchdog uses DynamoDB; no Postgres, no containers in this stack. Depth beats breadth. |
 
-## D-004 — Region: us-east-1
+## D-004 — Region: eu-north-1 (forced, and verified by testing)
 
-Fullest free tier, all services, cheapest. POPIA data-residency would point to af-south-1 for workloads holding South African personal data; the Watchdog holds only my own account's billing/config metadata, so cost and coverage won. Trade-off documented in README.
+The plan targeted us-east-1 (fullest free tier, cheapest). Reality: this account type is governed by an AWS-managed Service Control Policy that explicitly denies regional services (S3, Lambda, DynamoDB) outside eu-north-1, where AWS provisioned the project. Verified by CLI testing: CreateBucket denied in us-east-1 by SCP, identical call succeeded in eu-north-1; IAM (global) unaffected.
+
+So: everything builds in eu-north-1. Free-tier allowances for the services used (Lambda, DynamoDB, EventBridge, SQS, SNS, CloudWatch) apply regardless of region, so the cost model survives. The original trade-off note stands: POPIA data-residency would point to af-south-1 for workloads holding South African personal data; this project holds only my own account metadata.
+
+Lesson recorded: platform constraints are discovered by testing, not assumed from documentation.
 
 ## D-005 — Account type: AWS new experience (Builder ID)
 
@@ -43,6 +47,7 @@ The account was created through AWS's 2026 sign-up experience, where an AWS Buil
 - No classic root user exists → "root MFA, no root keys" becomes **Builder ID hardening**: TOTP MFA registered, recovery email set, MFA on the upstream social-login provider.
 - Daily identity is the Builder ID itself (AccountFullAccessRole) → no separate IAM admin user needed.
 - CLI access via `aws login` browser flow: temporary assumed-role credentials, max 12h, **zero stored access keys** — stronger than the classic access-key pattern the original plan assumed.
+- The account sits inside an AWS-managed organisation with a Service Control Policy: region-locked to eu-north-1, some services unavailable (Cost Anomaly Detection, IAM Access Analyzer). Documented per-case as they surface.
 
 ## D-006 — Free plan reality (observed, not assumed)
 
