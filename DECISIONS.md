@@ -92,6 +92,15 @@ free Account and billing support case.
 org-level permission boundary. Verifying the actual SCP against required
 IAM actions belongs in day-one account planning.
 
+
+## D-009: Manual approval gate on terraform apply (2026-09-17)
+
+Decision: The deploy pipeline runs terraform plan automatically on main, but apply waits for manual approval via a GitHub production environment with a required reviewer.
+
+Why: I am learning; I want to read every plan before it changes AWS. A bad merge cannot silently alter the account. Plan output is saved as an artefact and handed to apply, so what is approved is exactly what runs. This mirrors the standard team pattern (automated plan, human-gated apply).
+
+Alternative rejected: fully automatic apply on merge. One click cheaper, but removes the review moment and the safety net, both of which matter more than speed at this stage.
+
 ---
 
 *Format: new decisions get D-numbers and a date from here on.*
