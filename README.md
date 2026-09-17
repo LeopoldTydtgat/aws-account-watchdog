@@ -1,8 +1,8 @@
 # AWS Account Watchdog
 
-> Operational guardrails for my AWS account: daily cost reporting, automated security-group remediation, resource hygiene checks, drift detection, and incident logging — built with least-privilege IAM, Terraform, and keyless CI/CD, for under $1.50/month.
+> Operational guardrails for my AWS account: daily cost reporting, automated security-group remediation, resource hygiene checks, drift detection, and incident logging - built with least-privilege IAM, Terraform, and keyless CI/CD, for under $1.50/month.
 
-**Status:** Phase 0 — foundations. Live since September 2026.
+**Status:** Phase 0 - foundations. Live since September 2026.
 
 ---
 
@@ -21,7 +21,7 @@ Everything is Terraform, deployed keylessly via GitHub Actions OIDC. Cost: under
 
 ## Why this isn't "AWS already does this"
 
-I use AWS's native controls — Budgets, Cost Anomaly Detection, Config, CloudTrail, Access Analyzer — as the detection layer. The Watchdog is the layer companies actually build in-house: routing findings, applying custom remediation logic with safety controls, logging incidents, and producing reports a human actually reads. I'm not rebuilding AWS features out of ignorance; I'm extending them deliberately, and this README documents which is which.
+I use AWS's native controls - Budgets, Cost Anomaly Detection, Config, CloudTrail, Access Analyzer - as the detection layer. The Watchdog is the layer companies actually build in-house: routing findings, applying custom remediation logic with safety controls, logging incidents, and producing reports a human actually reads. I'm not rebuilding AWS features out of ignorance; I'm extending them deliberately, and this README documents which is which.
 
 ## Region choice
 
@@ -31,24 +31,24 @@ This runs in us-east-1: fullest free tier, all services, lowest cost. For worklo
 
 | Piece | Expected | Observed |
 |---|---|---|
-| Lambda (×3) | $0 | — |
-| EventBridge | $0 | — |
-| DynamoDB (provisioned) | $0 | — |
-| SES / SNS / SQS | $0 | — |
-| CloudWatch | $0 | — |
-| CloudTrail (S3 storage) | ~$0.01–0.05 | — |
-| Cost Explorer API | ~$0.30 | — |
-| AWS Config (scoped to SGs) | ~$0.20–0.50 | — |
-| **Total** | **~$0.50–1.50/month** | — |
+| Lambda (×3) | $0 | - |
+| EventBridge | $0 | - |
+| DynamoDB (provisioned) | $0 | - |
+| SES / SNS / SQS | $0 | - |
+| CloudWatch | $0 | - |
+| CloudTrail (S3 storage) | ~$0.01–0.05 | - |
+| Cost Explorer API | ~$0.30 | - |
+| AWS Config (scoped to SGs) | ~$0.20–0.50 | - |
+| **Total** | **~$0.50–1.50/month** | - |
 
 Observed column fills in as the system runs.
 
 ## Deep dives
 
-- [Decisions log](DECISIONS.md) — every design choice, including rejected ones
+- [Decisions log](DECISIONS.md) - every design choice, including rejected ones
 - [Changelog](CHANGELOG.md)
-- docs/ — architecture, IAM matrix, threat model, runbooks, incident reports, game days *(coming in later phases)*
-- proof/ — real reports, screenshots, alarm emails, masked and dated
+- docs/ - architecture, IAM matrix, threat model, runbooks, incident reports, game days *(coming in later phases)*
+- proof/ - real reports, screenshots, alarm emails, masked and dated
 
 ## Honest framing
 
