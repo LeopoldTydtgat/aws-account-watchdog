@@ -12,3 +12,4 @@ All notable changes to this project, newest first.
 - Local tooling installed: git, AWS CLI v2, Terraform (Windows 11)
 - CLI authenticated keylessly via `aws login` (temporary credentials, no stored keys)
 - Repo created public with README skeleton, DECISIONS.md, CHANGELOG.md
+- Added CI workflow (ci.yml): terraform fmt -check, init -backend=false, and validate run on every pull request via GitHub Actions. No AWS credentials involved.
