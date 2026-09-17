@@ -25,7 +25,7 @@ I use AWS's native controls - Budgets, Cost Anomaly Detection, Config, CloudTrai
 
 ## Region choice
 
-This runs in us-east-1: fullest free tier, all services, lowest cost. For workloads holding South African personal data, POPIA data-residency considerations would point to af-south-1 (Cape Town). The Watchdog holds only my own account's billing and configuration metadata, so cost and service coverage won. The trade-off is documented, not ignored.
+Everything runs in eu-north-1. The plan targeted us-east-1, but this account type is region-locked by an AWS-managed SCP (see D-004), verified by testing rather than assumed. Free-tier allowances for the services used here are identical. For workloads holding South African personal data, POPIA data-residency would point to af-south-1 (Cape Town); the Watchdog holds only my own account's billing and config metadata, so the constraint costs nothing.
 
 ## Cost (real observed numbers)
 
