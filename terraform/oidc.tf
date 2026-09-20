@@ -20,7 +20,10 @@ resource "aws_iam_role" "github_deploy" {
       Condition = {
         StringEquals = {
           "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
-          "token.actions.githubusercontent.com:sub" = "repo:LeopoldTydtgat/aws-account-watchdog:ref:refs/heads/main"
+          "token.actions.githubusercontent.com:sub" = [
+            "repo:LeopoldTydtgat@272191895/aws-account-watchdog@1373360883:ref:refs/heads/main",
+            "repo:LeopoldTydtgat@272191895/aws-account-watchdog@1373360883:environment:production"
+          ]
         }
       }
     }]
@@ -38,16 +41,29 @@ resource "aws_iam_role_policy" "deploy_iam_scoped" {
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Action = [
-        "iam:GetRole", "iam:CreateRole", "iam:DeleteRole", "iam:TagRole",
-        "iam:PutRolePolicy", "iam:GetRolePolicy", "iam:DeleteRolePolicy",
-        "iam:AttachRolePolicy", "iam:DetachRolePolicy", "iam:ListRolePolicies",
-        "iam:ListAttachedRolePolicies", "iam:ListInstanceProfilesForRole",
-        "iam:PassRole"
-      ]
-      Resource = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/watchdog-*"
-    }]
+    Statement = [
+      {
+        Sid    = "ManageWatchdogRoles"
+        Effect = "Allow"
+        Action = [
+          "iam:GetRole", "iam:CreateRole", "iam:DeleteRole", "iam:TagRole",
+          "iam:PutRolePolicy", "iam:GetRolePolicy", "iam:DeleteRolePolicy",
+          "iam:AttachRolePolicy", "iam:DetachRolePolicy", "iam:ListRolePolicies",
+          "iam:ListAttachedRolePolicies", "iam:ListInstanceProfilesForRole",
+          "iam:PassRole"
+        ]
+        Resource = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/watchdog-*"
+      },
+      {
+        Sid    = "ManageGitHubOidcProvider"
+        Effect = "Allow"
+        Action = [
+          "iam:GetOpenIDConnectProvider",
+          "iam:TagOpenIDConnectProvider",
+          "iam:UpdateOpenIDConnectProviderThumbprint"
+        ]
+        Resource = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:oidc-provider/token.actions.githubusercontent.com"
+      }
+    ]
   })
 }
