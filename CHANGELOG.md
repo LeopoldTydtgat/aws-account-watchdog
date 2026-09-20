@@ -2,6 +2,15 @@
 
 All notable changes to this project, newest first.
 
+## 2026-09-20 - OIDC live, keyless CI/CD working end to end
+- Activated advanced features on the account, taking control of the organisation (D-010). The old sandbox SCP set was replaced; the policy denying iam:CreateOpenIDConnectProvider no longer exists.
+- Created the GitHub OIDC provider and watchdog-github-deploy role via Terraform. PowerUserAccess plus an inline policy scoped to watchdog-* roles and the one OIDC provider.
+- Fixed the trust policy to match GitHub's numeric-ID subject claims, diagnosed from CloudTrail after 24 denied assume-role attempts (D-011).
+- AWS_DEPLOY_ROLE_ARN secret populated with the real ARN; placeholder removed.
+- Deploy pipeline green end to end: plan on main, manual approval gate, apply. Zero stored AWS keys.
+- Dropped screenshots as the default proof mechanism (D-012).
+
+
 ## 2026-09-17 - Paid Plan upgrade, pipeline v1
 - Upgraded account to Paid Plan (D-008); OIDC apply blocked pending SCP removal
 - Added CI workflow (ci.yml): terraform fmt -check, init -backend=false, and validate run on every pull request via GitHub Actions. No AWS credentials involved.
