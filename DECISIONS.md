@@ -104,3 +104,49 @@ Alternative rejected: fully automatic apply on merge. One click cheaper, but rem
 ---
 
 *Format: new decisions get D-numbers and a date from here on.*
+
+## D-010: Activate advanced features to regain org control (2026-09-20)
+
+Decision: Activate advanced features on the AWS account, promoting it to full control of its own organisation, so the blocking SCP could be lifted.
+
+Context: D-008 assumed the SCP sat in an AWS-managed organisation outside my control. A support case corrected that: o-laqten2dhu is my own organisation. The confusion came from one root email (leopold.tydtgat77@gmail.com) serving both the member account and the management account, while Builder ID social login always lands in the member account. Classic root sign-in to the management account was impossible because its password was never set and the reset flow looped on captcha.
+
+The real door was settings.aws.com, reached via Manage projects, which exposes the management layer. Activating advanced features is irreversible and free, preserves all existing resources, and permanently removes the $20 console spend limit. The zero-spend and $1 budget alarms survive, so the loss was accepted.
+
+Outcome: Activation completed. The old sandbox policy set was replaced entirely; p-3aemv0uc no longer exists. Seven SCPs remain, none denying iam:CreateOpenIDConnectProvider. The region-restriction policy (p-soifw7zx) permits iam:* in us-east-1, which is where IAM calls land since IAM is a global service. terraform apply then created the OIDC provider and deploy role on the first attempt.
+
+Correction to D-008: the Paid Plan upgrade was not what unblocked this, and waiting 24h would never have helped. The blocker was organisational, not billing. Rejecting the long-lived-keys fallback was right; it was never needed.
+
+Still watching: four BudgetsSpendLimitDeny* policies exist (Bedrock, Lambda, SageMaker, NewWorkloads). DenyNewWorkloads blocks lambda:CreateFunction, dynamodb:CreateTable and sqs:CreateQueue among others. Their Targets tabs must be checked before Phase 1, since an attachment to 895196059907 would stop the Watchdog build dead.
+
+
+## D-011: OIDC trust matches immutable numeric subject claims (2026-09-20)
+
+Decision: The deploy role trust policy matches the GitHub OIDC subject claim in its numeric-ID form, listing both the main-branch and production-environment subjects.
+
+Context: With the SCP gone, every deploy run still failed with sts:AssumeRoleWithWebIdentity AccessDenied. CloudTrail showed the actual claim GitHub presented:
+
+  repo:LeopoldTydtgat@272191895/aws-account-watchdog@1373360883:ref:refs/heads/main
+
+GitHub now embeds immutable numeric owner and repo IDs. The plain repo path shown in every tutorial no longer matches literally. 24 denied attempts were logged before the cause was found.
+
+Why the numeric form is better: renaming a repository or transferring ownership cannot silently carry access across. The identity is pinned to the object, not to a mutable label.
+
+Both subjects are listed because the apply job runs under environment: production, which changes the claim from the ref form to the environment form. A StringEquals list is an OR of exact matches, no wildcards.
+
+Second failure, fixed in the same change: PowerUserAccess deliberately excludes IAM, so the role could not read the OIDC provider its own Terraform manages. Granted GetOpenIDConnectProvider, TagOpenIDConnectProvider and UpdateOpenIDConnectProviderThumbprint scoped to that one provider. Create and Delete withheld on purpose: the pipeline cannot remove its own trust anchor or mint new federation paths.
+
+Diagnostic lesson: the error message named no subject. CloudTrail did. Reading the event record beat guessing at the trust policy.
+
+Evidence: Deploy #2 green end to end (plan, gated approval, apply), zero stored AWS keys.
+
+
+## D-012: Screenshots dropped as default proof (2026-09-20)
+
+Decision: Screenshots are no longer the default evidence mechanism for this project.
+
+Why: Capturing and filing them is slow enough that it interrupts the build, and better evidence exists at zero effort. Proof comes from the public repo history (commits with reasoning, PR bodies, dates), linked workflow run URLs, CloudTrail JSON pasted into incident reports, and CI status badges. These are machine-generated, timestamped and harder to fake than an image.
+
+Screenshots are kept only where nothing else can show the thing: a delivered report email, a dashboard graph over time, a security-group before and after.
+
+This supersedes the screenshot requirements in build plan v2.
