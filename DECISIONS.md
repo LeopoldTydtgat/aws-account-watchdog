@@ -150,3 +150,67 @@ Why: Capturing and filing them is slow enough that it interrupts the build, and 
 Screenshots are kept only where nothing else can show the thing: a delivered report email, a dashboard graph over time, a security-group before and after.
 
 This supersedes the screenshot requirements in build plan v2.
+
+## D-013: One organisation-wide CloudTrail trail (2026-10-13)
+
+Decision: A single organisation trail, watchdog-org-trail, created from the management account, covers all three accounts. Multi-region, log file validation on, home region eu-north-1, writing to the bucket watchdog-cloudtrail-895196059907 in the Hello World account.
+
+Why: Root lives in the management account. A trail inside Hello World alone would never see a root sign-in, which is the event I most need to catch. One org trail also means one bucket, one retention rule and one place to search.
+
+Bucket: versioned, public access blocked, SSE-S3 rather than KMS (KMS would add about $1/month, more than the rest of the project), 30-day expiry, HTTPS only, and a bucket policy that lets only this one trail write.
+
+Alternative rejected: one trail per account. Three trails, three buckets, three sets of rules to keep in step, for the same coverage.
+
+Trade-off: logs live in a workload account, not a dedicated log-archive account as a company would run it. Accepted at single-person scale; carried into the threat model.
+
+## D-014: Organisation stack applied locally, never by the pipeline (2026-10-13)
+
+Decision: terraform/org (the org trail and the management-account alerting) is applied by hand from my machine with the mgmt CLI profile. The pipeline never touches the management account.
+
+Why: The deploy role lives in Hello World. Giving it any route into the management account would make the pipeline the biggest blast radius in the project: whoever controls the pipeline would control the organisation. This stack is set up once and rarely changes, so automation buys little.
+
+Safeguards: provider allowed_account_ids pinned to the management account, so a wrong profile fails before any change; state in the same versioned, encrypted state bucket under its own key (org/terraform.tfstate); code still goes through a PR (PR #8), so every change is reviewed and on record.
+
+Cost of the choice: drift checks on this stack are a manual terraform plan, not the nightly pipeline check.
+
+## D-015: Alert email kept out of the public repo (2026-10-13)
+
+Decision: My alert email address never appears in the public repo or in pipeline output.
+
+How: The Hello World topic is in Terraform, but its email subscription was added once by hand with aws sns subscribe. The org stack is applied locally with no public plan artefact, so its address lives in a git-ignored terraform.tfvars.
+
+Why: Pipeline plan output is saved as an artefact on a public repo, readable by anyone with a GitHub account. An email address in code or pipeline tfvars would be published there. An SNS email subscription also needs a human to click a confirmation link, so Terraform cannot fully own it anyway.
+
+Trade-off: if the Hello World topic is ever recreated, its subscription disappears silently. It is listed in the manual changes register (D-017) and checked with aws sns list-subscriptions-by-topic.
+
+## D-016: Root alarm moved to CloudWatch Logs after a game day found it blind (2026-10-13)
+
+Context: The first root alert was an EventBridge rule (watchdog-root-activity) in us-east-1 in the management account, on the assumption that AWS records root sign-ins there. Testing it on 13 Oct: a root sign-in at 16:21 was recorded in us-west-2, because AWS routed it through us-west-2.signin.aws.amazon.com. The root console calls that followed in us-east-1 were all read-only, and EventBridge does not receive read-only management events. The rule saw nothing. A later sign-in through the global endpoint was recorded in us-east-1 and was caught. So the rule worked only sometimes, depending on routing I do not control.
+
+Decision: The org trail also delivers to a CloudWatch Logs group, /watchdog/org-trail (30-day retention). A metric filter using the CIS root-usage pattern counts root activity, and the alarm watchdog-root-activity (Sum over 60 seconds, threshold 1, missing data treated as not breaching) emails through an eu-north-1 SNS topic. The trail is multi-region, so a root event from any region lands in the same log group. Routing no longer matters.
+
+Checked before applying: the delivery role watchdog-cloudtrail-to-cloudwatch can only CreateLogStream and PutLogEvents into that one group. The filter pattern was tested with aws logs test-metric-filter against the real us-west-2 event (match) and a non-root CreateUser event (no match). Log volume measured at about 1 GB/month, inside the 5 GB free tier.
+
+Proof: root sign-in 18:06:39, alarm email 18:09:38.
+
+Alternative rejected: more EventBridge rules in more regions. Still a bet on where AWS routes sign-in, and each extra region means another edit to an SCP already near its 5,120-character limit.
+
+The us-east-1 EventBridge rule stays as a faster path when it does fire. The alarm is the guarantee.
+
+Lesson: an alarm that has never fired on the real event is not proven.
+
+## D-017: Register of manual changes outside Terraform (2026-10-13)
+
+Everything below was changed by hand in the console or CLI. None of it is in code, so drift detection will not see it. Listed so the account can be audited and rebuilt.
+
+| Date | Change | Where | Why |
+|---|---|---|---|
+| 2026-09-21 | Root password set (stored in password manager) and root MFA added (authenticator app, separate from Google) | Management account | Root hardening; the password had never been set |
+| 2026-09-21 | Centralised root access enabled (RootCredentialsManagement, RootSessions) | Organisation | Member accounts hold no root credentials (verified "Not present"); root tasks run from the management account |
+| 2026-09-21 | Cost Anomaly Detection subscription set to a single $1 absolute threshold | Management account, covers the org | Earliest possible warning at this spend level |
+| 2026-09-21 | SCP BudgetsSpendLimitDenyNewWorkloads deleted | Organisation | Would have blocked Lambda, DynamoDB and SQS creation in Phase 1; closes the open item in D-010 |
+| 2026-10-05 | SCP p-soifw7zx: events:* and sns:* added to the us-east-1 allow list | Organisation | IAM events are recorded in us-east-1, so the IAM-change rules and their SNS topics must live there. Original saved locally as scp-p-soifw7zx-original.json |
+| 2026-10-05 | CloudTrail trusted access enabled | Organisation | Required before an organisation trail can exist |
+| 2026-10-13 | Email subscription on Hello World us-east-1 topic watchdog-security-alerts | Hello World | See D-015 |
+
+Corrections to earlier entries: D-004's region is now a choice, not forced; the region lock is my own SCP (p-soifw7zx), kept deliberately. D-005's note that Cost Anomaly Detection and Access Analyzer are unavailable no longer holds; both are live.
