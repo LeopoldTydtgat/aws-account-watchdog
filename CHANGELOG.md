@@ -2,6 +2,14 @@
 
 All notable changes to this project, newest first.
 
+## 2026-10-13 - Audit layer live, root alarm fixed after game day
+- PR #7 (Hello World, via pipeline): CloudTrail log bucket (versioned, SSE-S3, 30-day expiry, writable only by the org trail), IAM Access Analyzer, us-east-1 SNS topic and EventBridge rule for IAM changes. Email subscription added by hand (D-015).
+- PR #8 (management account, applied locally, D-014): organisation trail watchdog-org-trail (multi-region, log file validation) covering all three accounts (D-013), plus us-east-1 SNS topic and EventBridge rules for root activity and IAM changes.
+- Game day: a root sign-in routed through us-west-2 was missed by the us-east-1 root rule (D-016).
+- PR #9 (management account, applied locally): org trail also delivers to CloudWatch Logs; CIS root-usage metric filter and alarm watchdog-root-activity notify through an eu-north-1 SNS topic.
+- All alarms proven live: IAM-change emails within a minute in both accounts; root alarm email 3 minutes after sign-in.
+- Decisions D-013 to D-017 recorded, including the register of manual changes outside Terraform.
+
 ## 2026-09-20 - OIDC live, keyless CI/CD working end to end
 - Activated advanced features on the account, taking control of the organisation (D-010). The old sandbox SCP set was replaced; the policy denying iam:CreateOpenIDConnectProvider no longer exists.
 - Created the GitHub OIDC provider and watchdog-github-deploy role via Terraform. PowerUserAccess plus an inline policy scoped to watchdog-* roles and the one OIDC provider.
