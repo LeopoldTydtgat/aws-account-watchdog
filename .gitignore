@@ -28,3 +28,6 @@ Thumbs.db
 *.tfstate
 *.tfstate.*
 crash.log
+
+# Lambda zips built by terraform plan
+terraform/build/

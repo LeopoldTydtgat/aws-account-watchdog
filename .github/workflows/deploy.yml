@@ -39,7 +39,11 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: tfplan
-          path: terraform/tfplan
+          # The Lambda zip is built during plan. The apply job runs on a
+          # fresh machine, so the exact zip the plan hashed travels with it.
+          path: |
+            terraform/tfplan
+            terraform/build/
 
   apply:
     needs: plan
