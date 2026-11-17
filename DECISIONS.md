@@ -212,5 +212,26 @@ Everything below was changed by hand in the console or CLI. None of it is in cod
 | 2026-10-05 | SCP p-soifw7zx: events:* and sns:* added to the us-east-1 allow list | Organisation | IAM events are recorded in us-east-1, so the IAM-change rules and their SNS topics must live there. Original saved locally as scp-p-soifw7zx-original.json |
 | 2026-10-05 | CloudTrail trusted access enabled | Organisation | Required before an organisation trail can exist |
 | 2026-10-13 | Email subscription on Hello World us-east-1 topic watchdog-security-alerts | Hello World | See D-015 |
+| 2026-10-14 | SES email identity verified in eu-north-1 (account stays in the SES sandbox) | Hello World | The cost report sends from and to this one address. The identity ARN contains the address, so it stays out of code (D-015) |
+| 2026-10-14 | SSM parameter /watchdog/report-email (String) | Hello World | The Lambda reads the address at runtime, so it never appears in code or pipeline output (D-015). String, not SecureString: an address is not a secret, and SecureString would need KMS decrypt on the role |
 
 Corrections to earlier entries: D-004's region is now a choice, not forced; the region lock is my own SCP (p-soifw7zx), kept deliberately. D-005's note that Cost Anomaly Detection and Access Analyzer are unavailable no longer holds; both are live.
+
+## D-018: Nightly cost report design (2026-11-17)
+
+Decision: one Lambda, watchdog-cost-reporter (Python 3.13, arm64, 128 MB), run by an EventBridge schedule at 04:00 UTC, which is 06:00 SAST all year because South Africa has no daylight saving. It asks Cost Explorer for yesterday's cost by service, stores the day in watchdog-data, reads the previous week back, and emails a short report: total, prior day with % change, 7-day average, top 5 services and a status line.
+
+Choices and why:
+
+- Credits and refunds are filtered out. With $120 of credits on the account, a credit-adjusted figure would read $0.00 every day and hide real usage.
+- The table key is the date (pk COST, sk YYYY-MM-DD) and every write is a full overwrite. A retry or a re-run cannot duplicate a day, and a later run picks up Cost Explorer's revisions to an estimated day.
+- One async retry, events older than an hour dropped. Every attempt is a paid Cost Explorer request ($0.01). A second failure is a real fault, and catching it is the job of the heartbeat alarm planned for Phase 4, which watches the CostReportSuccess metric.
+- Status line rules: SPIKE when a day is more than double the 7-day average and at least $0.05 (doubling from $0.01 to $0.02 is noise); OVER TARGET when the 30-day projection passes $1.50; otherwise OK.
+- Report logic (dates, parsing, trend maths, email text) lives in cost_report.py with no AWS calls, so it is unit-tested without credentials. handler.py only does the AWS calls. 13 tests run in CI on every PR.
+- Manual backfill: invoking with {"backfill_days": 7} loads up to 30 days in a single Cost Explorer request.
+- The Lambda zip is built during terraform plan. The apply job runs on a fresh runner, so deploy.yml carries the zip with the plan artefact. .gitattributes forces LF line endings on .py files so the zip hashes the same on Windows and Linux; the first pipeline plan matched the local plan's hash exactly.
+
+Alternatives rejected: parsing the Cost and Usage Report from S3 (free, but far more moving parts to save about $0.30 a month); SNS instead of SES for the email (SNS sends plain notification text with an unsubscribe footer, not a readable report).
+
+Proof: manual backfill run on 17 Nov 2026 returned status 200, stored 7 days and delivered the report for 16 Nov ($0.0068, on pace for $0.23/month) to the inbox.
+

@@ -2,6 +2,18 @@
 
 All notable changes to this project, newest first.
 
+## 2026-11-17 - Nightly cost report live
+- PR #14: cost-reporter Lambda, EventBridge schedule at 04:00 UTC (06:00 SAST), one async retry, invoke permission limited to that rule (D-018).
+- CI: new python-tests job runs pytest on every PR.
+- Deploy: the built Lambda zip now travels from the plan job to the apply job. .gitattributes keeps .py line endings identical across Windows and Linux.
+- First run: manual 7-day backfill stored 7 days and emailed the report for 16 Nov: $0.0068, on pace for $0.23/month.
+- IAM matrix started (docs/iam-matrix.md).
+
+## 2026-10-14 - Phase 1 groundwork
+- SES identity verified and report address stored in SSM by hand (D-017).
+- PR #12: watchdog-data DynamoDB table, provisioned 1/1 (always free), deletion protection on.
+- PR #13: watchdog-cost-reporter role, least-privilege inline policy and 30-day log group.
+
 ## 2026-10-13 - Audit layer live, root alarm fixed after game day
 - PR #7 (Hello World, via pipeline): CloudTrail log bucket (versioned, SSE-S3, 30-day expiry, writable only by the org trail), IAM Access Analyzer, us-east-1 SNS topic and EventBridge rule for IAM changes. Email subscription added by hand (D-015).
 - PR #8 (management account, applied locally, D-014): organisation trail watchdog-org-trail (multi-region, log file validation) covering all three accounts (D-013), plus us-east-1 SNS topic and EventBridge rules for root activity and IAM changes.

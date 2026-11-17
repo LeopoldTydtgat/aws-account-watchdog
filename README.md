@@ -2,7 +2,7 @@
 
 > Operational guardrails for my AWS account: daily cost reporting, automated security-group remediation, resource hygiene checks, drift detection, and incident logging - built with least-privilege IAM, Terraform, and keyless CI/CD, for under $1.50/month.
 
-**Status:** Phase 0 - foundations. Live since September 2026.
+**Status:** Phase 1 - nightly cost report live. Running since September 2026.
 
 ---
 
@@ -47,7 +47,9 @@ Observed column fills in as the system runs.
 
 - [Decisions log](DECISIONS.md) - every design choice, including rejected ones
 - [Changelog](CHANGELOG.md)
-- docs/ - architecture, IAM matrix, threat model, runbooks, incident reports, game days *(coming in later phases)*
+- [IAM matrix](docs/iam-matrix.md) - every role, what it can do, and why
+- [Incident reports](docs/incidents/)
+- docs/ - architecture, threat model, runbooks, game days *(coming in later phases)*
 - proof/ - real reports, screenshots, alarm emails, masked and dated
 
 ## Honest framing
