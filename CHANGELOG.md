@@ -2,6 +2,15 @@
 
 All notable changes to this project, newest first.
 
+## 2026-11-17 - Security patrol live in dry run (Phase 2)
+- PR #16: VPC test range (10.20.0.0/16, public and private subnets, no instances, no NAT). Security groups watchdog-range-web (443 open) and watchdog-range-admin (22 from inside the VPC only); default security group stripped.
+- Config service-linked role created by hand (D-017).
+- PR #17: AWS Config recording security groups only, private history bucket, managed rule watchdog-restricted-admin-ports for 22 and 3389 (D-019). First apply failed on an IAM propagation race between the new PassRole permission and the recorder; the re-run applied the remaining 4 resources.
+- PR #18: watchdog-sg-remediator role (no revoke permission in stage 1), log group and dead-letter queue, shipped ahead of the function.
+- PR #19: watchdog-sg-remediator function in DRY_RUN, EventBridge rule on NON_COMPLIANT results, retries and dead-letter queue, 21 new unit tests (D-020). Pipeline zip hash matched the local build.
+- Game Day 01 (docs/game-days/game-day-01.md): SSH opened to the world on the test range, WOULD REVOKE alert 2 min 42 s later.
+- Runbook: docs/runbooks/security-remediation-failed.md. IAM matrix updated.
+
 ## 2026-11-17 - Nightly cost report live
 - PR #14: cost-reporter Lambda, EventBridge schedule at 04:00 UTC (06:00 SAST), one async retry, invoke permission limited to that rule (D-018).
 - CI: new python-tests job runs pytest on every PR.

@@ -2,7 +2,7 @@
 
 > Operational guardrails for my AWS account: daily cost reporting, automated security-group remediation, resource hygiene checks, drift detection, and incident logging - built with least-privilege IAM, Terraform, and keyless CI/CD, for under $1.50/month.
 
-**Status:** Phase 1 - nightly cost report live. Running since September 2026.
+**Status:** Phase 2 - security patrol live in dry run, nightly cost report live. Running since September 2026.
 
 ---
 

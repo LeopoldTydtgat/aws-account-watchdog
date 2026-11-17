@@ -214,6 +214,7 @@ Everything below was changed by hand in the console or CLI. None of it is in cod
 | 2026-10-13 | Email subscription on Hello World us-east-1 topic watchdog-security-alerts | Hello World | See D-015 |
 | 2026-10-14 | SES email identity verified in eu-north-1 (account stays in the SES sandbox) | Hello World | The cost report sends from and to this one address. The identity ARN contains the address, so it stays out of code (D-015) |
 | 2026-10-14 | SSM parameter /watchdog/report-email (String) | Hello World | The Lambda reads the address at runtime, so it never appears in code or pipeline output (D-015). String, not SecureString: an address is not a secret, and SecureString would need KMS decrypt on the role |
+| 2026-11-17 | Service-linked role AWSServiceRoleForConfig created (`aws iam create-service-linked-role --aws-service-name config.amazonaws.com`) | Hello World | Config's recorder needs it. The pipeline role can only manage watchdog-* roles, so Terraform references this role by ARN and may only pass it to config.amazonaws.com (D-019) |
 
 Corrections to earlier entries: D-004's region is now a choice, not forced; the region lock is my own SCP (p-soifw7zx), kept deliberately. D-005's note that Cost Anomaly Detection and Access Analyzer are unavailable no longer holds; both are live.
 
@@ -235,3 +236,42 @@ Alternatives rejected: parsing the Cost and Usage Report from S3 (free, but far 
 
 Proof: manual backfill run on 17 Nov 2026 returned status 200, stored 7 days and delivered the report for 16 Nov ($0.0068, on pace for $0.23/month) to the inbox.
 
+## D-019: AWS Config scoped to security groups as the detection layer (2026-11-17)
+
+Decision: AWS Config records one resource type, AWS::EC2::SecurityGroup, continuously, and runs one AWS managed rule, RESTRICTED_INCOMING_TRAFFIC (watchdog-restricted-admin-ports), which marks a security group NON_COMPLIANT when it allows inbound TCP from anywhere on 22 (SSH) or 3389 (RDP). Config history goes to a private bucket, watchdog-config-<account>, SSE-S3, 30-day expiry, writable only by Config for this account, HTTPS only.
+
+Choices and why:
+
+- Security groups only. Config bills per configuration item recorded ($0.003 each, continuous) and per rule evaluation ($0.001 each). Recording every resource type would bill for every change in the account for no benefit here. A handful of security groups that rarely change cost cents a month.
+- Continuous, not daily, recording. Daily recording is cheaper per item only when resources change often, and it would turn a 2-minute detection into up to 24 hours.
+- A managed rule, not a custom Lambda rule. AWS maintains the logic, and it costs nothing extra to run.
+- The service-linked role is created once by hand (D-017). The pipeline's IAM permissions stop at watchdog-* roles. It gets iam:PassRole on this one role, only when passed to config.amazonaws.com.
+
+Alternative rejected: CloudTrail plus EventBridge alone, matching AuthorizeSecurityGroupIngress calls. Faster (seconds), and free, but it only sees the API call, not the resulting state. It misses a group that was already open before the Watchdog existed, and it has to reimplement "is this exposed?" for every way a rule can be written. It remains a useful early warning on top of Config (open follow-up from Game Day 01).
+
+Lesson from the first deploy (Deploy #11): the PassRole permission and the recorder were applied in the same run with nothing ordering them. The recorder call reached IAM before the new permission had propagated and failed with AccessDenied. The re-run succeeded with nothing changed in code. Since then, a role and the resource that needs it ship in separate PRs (see D-020).
+
+## D-020: Security-group remediator, dry run first (2026-11-17)
+
+Decision: Lambda watchdog-sg-remediator (Python 3.13, arm64, 128 MB) is triggered by EventBridge rule watchdog-sg-noncompliant, which passes only NON_COMPLIANT results from watchdog-restricted-admin-ports. The function reads the group as it is now, finds each rule open to 0.0.0.0/0 or ::/0 on a blocked port, writes an incident to watchdog-data and emails the result.
+
+Two stages:
+
+- **Stage 1, now: DRY_RUN.** Alerts WOULD REVOKE and changes nothing. Enforced twice: the code treats anything other than exactly "false" as dry run, and the role has no ec2:RevokeSecurityGroupIngress at all.
+- **Stage 2, later: live.** Adds that one permission, scoped to security groups, and sets DRY_RUN to "false". The function then removes only the exposed rules, re-reads the group and reports what is left. Criteria to switch: two weeks in dry run with every alert a true positive.
+
+Safety controls:
+
+- Allow-list: a group tagged watchdog:exclude=true gets ALERT ONLY in either stage, for ports opened on purpose. The alert still goes out, so an exception is never silent.
+- Idempotency: EventBridge and Lambda can both deliver an event more than once. The incident key is the Config evaluation time plus the group ID (pk INC, sk <time>#<sg-id>). It is written OPEN with a conditional put, then NOTIFIED after the email. A repeat of a NOTIFIED incident is skipped; an attempt that died before emailing can be retried.
+- The function re-reads the group instead of trusting the event, so a group closed or deleted in the meantime causes no action.
+- The blocked ports are read from the Config rule's own parameters, so the rule and the function cannot drift apart.
+- Least privilege: DynamoDB writes are limited to the INC partition with dynamodb:LeadingKeys, so this role cannot touch the cost history in the same table.
+
+Failure handling: two Lambda retries, then the event goes to SQS dead-letter queue watchdog-sg-remediator-dlq (SSE, 14 days) through an on-failure destination. EventBridge delivery failures go to the same queue; its policy allows only this rule, HTTPS only. Runbook: docs/runbooks/security-remediation-failed.md.
+
+Delivery: role, log group and queue shipped first (PR #18), the function and trigger second (PR #19), so the permissions existed before anything used them (lesson in D-019).
+
+Alternatives rejected: Step Functions with a human approval step (right instinct, too heavy for one account; dry run plus allow-list gives the same safety and is easier to explain); revoking the whole rule set of a flagged group (would break legitimate rules such as SSH from inside the VPC).
+
+Proof: Game Day 01 (docs/game-days/game-day-01.md). Port 22 opened to the world at 18:26:13, alert sent at 18:28:55, 2 min 42 s end to end.
