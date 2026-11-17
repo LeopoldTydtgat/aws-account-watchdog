@@ -63,6 +63,15 @@ resource "aws_iam_role_policy" "deploy_iam_scoped" {
           "iam:UpdateOpenIDConnectProviderThumbprint"
         ]
         Resource = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:oidc-provider/token.actions.githubusercontent.com"
+      },
+      {
+        # Lets Terraform point the Config recorder at its service-linked
+        # role. Only that one role, and only to the Config service.
+        Sid       = "PassConfigServiceRole"
+        Effect    = "Allow"
+        Action    = "iam:PassRole"
+        Resource  = local.config_service_role_arn
+        Condition = { StringEquals = { "iam:PassedToService" = "config.amazonaws.com" } }
       }
     ]
   })
