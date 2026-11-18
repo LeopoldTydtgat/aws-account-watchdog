@@ -2,6 +2,9 @@
 
 All notable changes to this project, newest first.
 
+## 2026-11-18 - Remediator memory raised
+- watchdog-sg-remediator memory 128 MB to 256 MB. Game Day 01 used 111 of 128 MB and took 4.9 s cold; Lambda CPU scales with memory (D-020).
+
 ## 2026-11-17 - Security patrol live in dry run (Phase 2)
 - PR #16: VPC test range (10.20.0.0/16, public and private subnets, no instances, no NAT). Security groups watchdog-range-web (443 open) and watchdog-range-admin (22 from inside the VPC only); default security group stripped.
 - Config service-linked role created by hand (D-017).
