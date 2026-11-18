@@ -61,18 +61,18 @@ def test_idle_address_is_flagged_and_associated_is_not():
     assert [row["id"] for row in r.find_idle_addresses(addresses)] == ["eipalloc-idle"]
 
 
-def test_untagged_skips_default_vpc_and_dedupes_ec2_from_tagging_api():
+def test_untagged_skips_aws_defaults_and_dedupes_ec2_from_tagging_api():
     vpcs = [
         {"VpcId": "vpc-default", "IsDefault": True},
         {"VpcId": "vpc-range", "IsDefault": False, "Tags": GOOD_TAGS},
     ]
     subnets = [
-        {"SubnetId": "subnet-default", "VpcId": "vpc-default"},
+        {"SubnetId": "subnet-default", "VpcId": "vpc-default", "DefaultForAz": True},
         {"SubnetId": "subnet-range", "VpcId": "vpc-range", "Tags": GOOD_TAGS},
     ]
     groups = [
-        {"GroupId": "sg-default", "VpcId": "vpc-default"},
-        {"GroupId": "sg-handmade", "VpcId": "vpc-range", "Tags": [{"Key": "project", "Value": "x"}]},
+        {"GroupId": "sg-default", "GroupName": "default", "VpcId": "vpc-default"},
+        {"GroupId": "sg-handmade", "GroupName": "lab", "VpcId": "vpc-range", "Tags": [{"Key": "project", "Value": "x"}]},
     ]
     volumes = [{"VolumeId": "vol-1", "State": "available"}]
     inventory = r.ec2_inventory([], volumes, [], [], vpcs, subnets, groups)
@@ -86,8 +86,7 @@ def test_untagged_skips_default_vpc_and_dedupes_ec2_from_tagging_api():
         # Fully tagged: not reported.
         {"ResourceARN": "arn:aws:s3:::watchdog-config-111122223333", "Tags": GOOD_TAGS},
     ]
-    skip = r.default_vpc_ids(vpcs)
-    rows = r.find_untagged(inventory, tagged, REQUIRED, skip)
+    rows = r.find_untagged(inventory, tagged, REQUIRED)
 
     assert [(row["type"], row["id"]) for row in rows] == [
         ("lambda function", "function:handmade"),
@@ -95,7 +94,23 @@ def test_untagged_skips_default_vpc_and_dedupes_ec2_from_tagging_api():
         ("volume", "vol-1"),
     ]
     assert rows[1]["detail"] == "missing owner"
-    assert r.skipped_defaults(inventory, skip) == 3
+    assert r.skipped_defaults(inventory) == 3
+
+
+def test_hand_made_things_inside_the_default_vpc_are_still_checked():
+    """Game Day finding: skipping the whole default VPC hid two hand-made
+    security groups (lab-web-access, launch-wizard-1)."""
+    vpcs = [{"VpcId": "vpc-default", "IsDefault": True}]
+    groups = [
+        {"GroupId": "sg-default", "GroupName": "default", "VpcId": "vpc-default"},
+        {"GroupId": "sg-lab", "GroupName": "lab-web-access", "VpcId": "vpc-default"},
+        {"GroupId": "sg-wizard", "GroupName": "launch-wizard-1", "VpcId": "vpc-default"},
+    ]
+    instances = [{"InstanceId": "i-lab", "State": {"Name": "running"}, "VpcId": "vpc-default"}]
+    inventory = r.ec2_inventory(instances, [], [], [], vpcs, [], groups)
+    rows = r.find_untagged(inventory, [], REQUIRED)
+    assert [row["id"] for row in rows] == ["i-lab", "sg-lab", "sg-wizard"]
+    assert r.skipped_defaults(inventory) == 2
 
 
 def test_terminated_instances_are_ignored():
@@ -121,7 +136,7 @@ def test_all_clear_email():
     assert subject == "Watchdog housekeeping: all clear"
     assert "Nothing found." in body
     assert "Run:     2026-11-23 06:30 SAST" in body
-    assert "Skipped 3 resources in the default VPC" in body
+    assert "Skipped 3 resources AWS creates by itself" in body
     assert "never stops, deletes or changes anything" in body
     assert report["run_date"] == "2026-11-23"
 

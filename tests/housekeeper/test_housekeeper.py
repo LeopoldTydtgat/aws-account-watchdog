@@ -40,7 +40,7 @@ def stub_inventory(stubs, volumes):
     ec2.add_response("describe_snapshots", {"Snapshots": []}, {"OwnerIds": ["self"]})
     ec2.add_response("describe_addresses", {"Addresses": []}, {})
     ec2.add_response("describe_vpcs", {"Vpcs": [{"VpcId": "vpc-default", "IsDefault": True}]}, {})
-    ec2.add_response("describe_subnets", {"Subnets": [{"SubnetId": "subnet-d", "VpcId": "vpc-default"}]}, {})
+    ec2.add_response("describe_subnets", {"Subnets": [{"SubnetId": "subnet-d", "VpcId": "vpc-default", "DefaultForAz": True}]}, {})
     ec2.add_response("describe_security_groups", {"SecurityGroups": [
         {"GroupId": "sg-d", "GroupName": "default", "VpcId": "vpc-default", "OwnerId": "1", "Description": "d"}
     ]}, {})

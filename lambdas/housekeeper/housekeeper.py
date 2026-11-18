@@ -21,7 +21,6 @@ import boto3
 
 from hk_rules import (
     build_report,
-    default_vpc_ids,
     ec2_inventory,
     find_idle_addresses,
     find_old_snapshots,
@@ -85,15 +84,14 @@ def analyse(data, now, region):
         data["instances"], data["volumes"], data["snapshots"], data["addresses"],
         data["vpcs"], data["subnets"], data["groups"],
     )
-    skip = default_vpc_ids(data["vpcs"])
     findings = {
         "unattached_volumes": find_unattached_volumes(data["volumes"]),
         "stopped_instances": find_stopped_instances(data["instances"]),
         "idle_addresses": find_idle_addresses(data["addresses"]),
         "old_snapshots": find_old_snapshots(data["snapshots"], now, SNAPSHOT_MAX_AGE_DAYS),
-        "untagged": find_untagged(inventory, data["tagged"], REQUIRED_TAGS, skip),
+        "untagged": find_untagged(inventory, data["tagged"], REQUIRED_TAGS),
     }
-    return build_report(now, findings, REQUIRED_TAGS, skipped_defaults(inventory, skip), region)
+    return build_report(now, findings, REQUIRED_TAGS, skipped_defaults(inventory), region)
 
 
 def store(report):
