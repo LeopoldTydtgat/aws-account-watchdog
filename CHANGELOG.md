@@ -2,6 +2,10 @@
 
 All notable changes to this project, newest first.
 
+## 2026-11-18 - Game Day 05: state file recovery
+- Deleted the Hello World stack's state file on purpose. Terraform then planned 65 resources to add. Restored it from S3 versioning by removing the delete marker: same version, hash identical to a backup taken beforehand, plan back to No changes, in about half a minute.
+- Runbook: docs/runbooks/state-file-lost.md (deleted and overwritten cases). Game day: docs/game-days/game-day-05.md.
+
 ## 2026-11-18 - Nightly drift detection live (Phase 3)
 - Two unused security groups left over from console labs deleted by hand (D-017).
 - PR #27: watchdog-github-drift role, read only, usable only from the drift-check GitHub environment (Deploy #18). The environment and its secret were set up by hand (D-017).
