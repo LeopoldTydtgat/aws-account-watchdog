@@ -16,7 +16,7 @@ resource "aws_lambda_function" "sg_remediator" {
   handler       = "remediator.lambda_handler"
   runtime       = "python3.13"
   architectures = ["arm64"]
-  memory_size   = 128
+  memory_size   = 256
   timeout       = 30
 
   filename         = data.archive_file.sg_remediator.output_path

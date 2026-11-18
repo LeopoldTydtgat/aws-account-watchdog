@@ -253,7 +253,7 @@ Lesson from the first deploy (Deploy #11): the PassRole permission and the recor
 
 ## D-020: Security-group remediator, dry run first (2026-11-17)
 
-Decision: Lambda watchdog-sg-remediator (Python 3.13, arm64, 128 MB) is triggered by EventBridge rule watchdog-sg-noncompliant, which passes only NON_COMPLIANT results from watchdog-restricted-admin-ports. The function reads the group as it is now, finds each rule open to 0.0.0.0/0 or ::/0 on a blocked port, writes an incident to watchdog-data and emails the result.
+Decision: Lambda watchdog-sg-remediator (Python 3.13, arm64, 256 MB; raised from 128 MB after Game Day 01) is triggered by EventBridge rule watchdog-sg-noncompliant, which passes only NON_COMPLIANT results from watchdog-restricted-admin-ports. The function reads the group as it is now, finds each rule open to 0.0.0.0/0 or ::/0 on a blocked port, writes an incident to watchdog-data and emails the result.
 
 Two stages:
 
