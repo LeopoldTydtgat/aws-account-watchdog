@@ -37,6 +37,24 @@ Not granted in stage 1: ec2:RevokeSecurityGroupIngress. Dry run is enforced by I
 
 Blast radius: list security groups, write incident items to one table, read one parameter, send email from the verified identity, write its own logs, Watchdog metrics and one queue. It cannot change any security group.
 
+## watchdog-housekeeper (Hello World)
+
+Trusted by: lambda.amazonaws.com, only from this account (aws:SourceAccount).
+
+| Permission | Resource | Why |
+|---|---|---|
+| ec2:DescribeInstances, DescribeVolumes, DescribeSnapshots, DescribeAddresses, DescribeVpcs, DescribeSubnets, DescribeSecurityGroups | * | Find forgotten and untagged EC2 resources. EC2 Describe calls have no resource-level permissions |
+| tag:GetResources | * | Read the tags of everything else in the region |
+| dynamodb:PutItem | watchdog-data table, partition HK only (dynamodb:LeadingKeys) | Store each weekly report without being able to touch costs or incidents |
+| ssm:GetParameter | /watchdog/report-email | Read the report address at runtime (D-015) |
+| ses:SendEmail | SES identities in eu-north-1 | Send the report. identity/* because the identity ARN contains the address |
+| logs:CreateLogStream, logs:PutLogEvents | its own log group | Write its logs |
+| cloudwatch:PutMetricData | * where namespace = Watchdog | Publish HousekeepingSuccess and HousekeepingFailure |
+
+Not granted: any stop, delete, modify or tag action. The housekeeper reports; a person decides (D-021).
+
+Blast radius: list EC2 resources and tags in this account, write housekeeping items to one table, read one parameter, send email from the verified identity, write its own logs and Watchdog metrics. It cannot change anything.
+
 ## watchdog-github-deploy (Hello World)
 
 Trusted by: GitHub OIDC, only for this repo's main branch and production environment (D-011).

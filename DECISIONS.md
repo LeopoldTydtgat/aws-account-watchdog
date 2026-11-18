@@ -275,3 +275,32 @@ Delivery: role, log group and queue shipped first (PR #18), the function and tri
 Alternatives rejected: Step Functions with a human approval step (right instinct, too heavy for one account; dry run plus allow-list gives the same safety and is easier to explain); revoking the whole rule set of a flagged group (would break legitimate rules such as SSH from inside the VPC).
 
 Proof: Game Day 01 (docs/game-days/game-day-01.md). Port 22 opened to the world at 18:26:13, alert sent at 18:28:55, 2 min 42 s end to end.
+
+## D-021: Weekly housekeeper, report only (2026-11-18)
+
+Decision: Lambda watchdog-housekeeper (Python 3.13, arm64, 256 MB) runs every Monday at 04:30 UTC (06:30 SAST) from EventBridge rule watchdog-housekeeper-weekly. It reads EC2 resources and resource tags in eu-north-1 and emails a plain-English report of:
+
+- unattached EBS volumes (billed every hour, serve nothing)
+- stopped instances (still pay for their disks)
+- Elastic IPs attached to nothing (charged every hour)
+- snapshots older than 30 days
+- resources missing the `project` or `owner` tag
+
+Each finding comes with why it matters and what to do. The run is stored in watchdog-data (pk HK, sk run date) and publishes HousekeepingSuccess or HousekeepingFailure for the Phase 4 heartbeat.
+
+Report only: the role has Describe and tag-read permissions, no stop, delete or tag. Removing resources is irreversible, so a person decides. Same principle as the remediator's dry run (D-020), without a stage 2.
+
+Scope and known limits:
+
+- eu-north-1 only. The region-lock SCP (D-004) blocks EC2 and tagging calls in us-east-1, and only EventBridge rules and SNS topics live there.
+- EC2 resources are read with Describe calls, so even never-tagged ones are seen. Everything else comes from the Resource Groups Tagging API, which only lists resources that have, or once had, a tag. A non-EC2 resource that was never tagged is invisible to this check. Accepted: everything the Watchdog builds carries default tags, and the costly forgotten resources are EC2.
+- What AWS creates by itself is skipped by the tag check: the default VPC, its default subnets and every security group named `default`. Everything a person makes, including inside the default VPC, is checked. The first version skipped the whole default VPC; the live test showed it hid two hand-made security groups (PR #25).
+- `managed-by` is not required, so a resource made by hand on purpose only needs `project` and `owner`.
+
+Failure handling: one async retry, then the heartbeat alarm (Phase 4) is what should notice, same as the cost reporter (D-018). A re-run on the same day overwrites that day's item.
+
+Delivery: role and log group first (PR #23), function and schedule second (PR #24), as in D-020. PR #25 fixed the default-VPC rule and made the deploy pipeline run on `lambdas/**` as well, because Terraform zips the Lambda code and a code-only change would otherwise never deploy.
+
+Alternatives rejected: AWS Trusted Advisor cost checks (full checks need a Business support plan); AWS Config with the required-tags managed rule (would mean recording every resource type, which Config bills per item, against the security-groups-only scope in D-019); auto-deleting old snapshots (irreversible, and a person should decide).
+
+Proof: live test 18 Nov. 12:31 run found the two hand-made security groups missing tags; with an untagged 1 GiB test volume added, the next run reported 4 findings (the volume as unattached and as untagged). The volume was then deleted.

@@ -2,6 +2,12 @@
 
 All notable changes to this project, newest first.
 
+## 2026-11-18 - Weekly housekeeper live (Phase 3)
+- PR #23: watchdog-housekeeper role (read only: no stop, delete or tag) and log group.
+- PR #24: watchdog-housekeeper function, Mondays 06:30 SAST. Reports unattached disks, stopped servers, idle public IPs, snapshots older than 30 days and resources missing the project or owner tag (D-021). 16 new unit tests.
+- First live run said all clear but skipped 7 resources in the default VPC, 2 of them hand-made security groups. PR #25: skip only what AWS creates by itself. Same PR: the deploy pipeline now also runs on changes under lambdas/, because that fix touched no .tf file and would not have deployed.
+- Live test: an untagged 1 GiB test volume was reported as unattached and as untagged, then deleted.
+
 ## 2026-11-18 - Remediator memory raised
 - watchdog-sg-remediator memory 128 MB to 256 MB. Game Day 01 used 111 of 128 MB and took 4.9 s cold; Lambda CPU scales with memory (D-020).
 - Game Day 01 re-run at 256 MB: run time 4.9 s to 2.5 s, memory used 45%, cost about the same. Change to alert 2 min 34 s; Config is still the slow link.
