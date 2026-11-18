@@ -5,6 +5,9 @@ on:
     branches: [main]
     paths:
       - "terraform/**"
+      # Lambda code is zipped by Terraform, so a code-only change must
+      # deploy too (found 18 Nov: a housekeeper fix touched no .tf file).
+      - "lambdas/**"
 
 permissions:
   id-token: write

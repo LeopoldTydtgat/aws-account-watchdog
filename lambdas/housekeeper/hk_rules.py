@@ -74,32 +74,35 @@ def as_datetime(value):
     return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
 
 
-def default_vpc_ids(vpcs):
-    """AWS creates a default VPC in every region. It and everything in it
-    are skipped: they are AWS's, not forgotten work."""
-    return {v["VpcId"] for v in vpcs if v.get("IsDefault")}
-
-
 def ec2_inventory(instances, volumes, snapshots, addresses, vpcs, subnets, groups):
-    """One flat list of the EC2 resources the handler read, with their tags
-    and the VPC they belong to (where they have one)."""
+    """One flat list of the EC2 resources the handler read, with their tags.
+
+    aws_default marks the pieces AWS creates by itself in every region and
+    VPC: the default VPC, its default subnets and each VPC's security group
+    named "default". Those are skipped by the tag check. Anything a person
+    made inside the default VPC is still checked (Game Day finding: a rule
+    that skipped the whole default VPC hid two hand-made security groups)."""
     rows = []
+
+    def add(rid, kind, tags, aws_default=False):
+        rows.append({"id": rid, "type": kind, "tags": tags, "aws_default": aws_default})
+
     for i in instances:
         if i.get("State", {}).get("Name") in ("terminated", "shutting-down"):
             continue
-        rows.append({"id": i["InstanceId"], "type": "instance", "tags": i.get("Tags"), "vpc_id": i.get("VpcId")})
+        add(i["InstanceId"], "instance", i.get("Tags"))
     for v in volumes:
-        rows.append({"id": v["VolumeId"], "type": "volume", "tags": v.get("Tags"), "vpc_id": None})
+        add(v["VolumeId"], "volume", v.get("Tags"))
     for s in snapshots:
-        rows.append({"id": s["SnapshotId"], "type": "snapshot", "tags": s.get("Tags"), "vpc_id": None})
+        add(s["SnapshotId"], "snapshot", s.get("Tags"))
     for a in addresses:
-        rows.append({"id": a.get("AllocationId") or a.get("PublicIp"), "type": "elastic-ip", "tags": a.get("Tags"), "vpc_id": None})
+        add(a.get("AllocationId") or a.get("PublicIp"), "elastic-ip", a.get("Tags"))
     for v in vpcs:
-        rows.append({"id": v["VpcId"], "type": "vpc", "tags": v.get("Tags"), "vpc_id": v["VpcId"]})
+        add(v["VpcId"], "vpc", v.get("Tags"), bool(v.get("IsDefault")))
     for s in subnets:
-        rows.append({"id": s["SubnetId"], "type": "subnet", "tags": s.get("Tags"), "vpc_id": s.get("VpcId")})
+        add(s["SubnetId"], "subnet", s.get("Tags"), bool(s.get("DefaultForAz")))
     for g in groups:
-        rows.append({"id": g["GroupId"], "type": "security-group", "tags": g.get("Tags"), "vpc_id": g.get("VpcId")})
+        add(g["GroupId"], "security-group", g.get("Tags"), g.get("GroupName") == "default")
     return rows
 
 
@@ -129,7 +132,7 @@ def is_described_ec2(arn):
     return service == "ec2" and resource.split("/", 1)[0] in DESCRIBED_EC2_TYPES
 
 
-def find_untagged(inventory, tagged_resources, required, skip_vpcs):
+def find_untagged(inventory, tagged_resources, required):
     """Resources missing any required tag key.
 
     EC2 resources come from the Describe calls, so even ones never tagged
@@ -138,7 +141,7 @@ def find_untagged(inventory, tagged_resources, required, skip_vpcs):
     resources are a known blind spot, recorded in D-021."""
     rows = []
     for r in inventory:
-        if r.get("vpc_id") in skip_vpcs:
+        if r["aws_default"]:
             continue
         miss = missing_tags(r["tags"], required)
         if miss:
@@ -153,8 +156,8 @@ def find_untagged(inventory, tagged_resources, required, skip_vpcs):
     return sorted(rows, key=lambda row: (row["type"], row["id"]))
 
 
-def skipped_defaults(inventory, skip_vpcs):
-    return sum(1 for r in inventory if r.get("vpc_id") in skip_vpcs)
+def skipped_defaults(inventory):
+    return sum(1 for r in inventory if r["aws_default"])
 
 
 def find_stopped_instances(instances):
@@ -255,7 +258,8 @@ def format_email(report):
     lines.append(f"Tags checked: {', '.join(report['required_tags'])}.")
     if report["skipped_defaults"]:
         lines.append(
-            f"Skipped {report['skipped_defaults']} resources in the default VPC that AWS created."
+            f"Skipped {report['skipped_defaults']} resources AWS creates by itself "
+            "(default VPC, default subnets, default security groups)."
         )
     lines.append("This report only looks. It never stops, deletes or changes anything.")
     return subject_line(report), "\n".join(lines) + "\n"
