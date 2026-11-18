@@ -6,7 +6,7 @@
 | Type | Controlled drill (game day), change made by me on the test range |
 | Target | `watchdog-range-admin` (sg-0d9ce1febc31da95f) in the test range VPC (vpc-0cbd5431e3edaa393). No instances, nothing reachable behind it |
 | Mode | Remediator in DRY_RUN (stage 1) |
-| Result | Detected and alerted 2 min 42 s after the change. Nothing was changed by the Watchdog, as designed |
+| Result | Detected and alerted 2 min 42 s after the change (2 min 34 s on the 18 Nov re-run). Nothing was changed by the Watchdog, as designed |
 | Related | D-019, D-020, PR #17, PR #18, PR #19 |
 
 Times are SAST (UTC+2). AWS records UTC.
@@ -80,9 +80,47 @@ REPORT Duration: 4870.30 ms  Billed Duration: 5134 ms  Memory Size: 128 MB
 5. **Recovery is silent by design.** Config returned to COMPLIANT within 5 minutes of the revoke. No email is sent for that, because the EventBridge rule only forwards NON_COMPLIANT.
 6. **The IAM-change alarm caught the remediator's own role being created** during the deploy (PutRolePolicy by the pipeline role through GitHub OIDC). Expected and benign, and proof the alarm covers new roles.
 
+## Re-run after memory change (2026-11-18)
+
+Same steps, after PR #21 raised the remediator from 128 MB to 256 MB (Deploy #14). The configuration change forced a fresh environment, so this was also a cold start: like for like with the first run.
+
+| Time (SAST) | Event | Since change |
+|---|---|---|
+| 11:23:30 | Port 22 opened to 0.0.0.0/0 (rule sgr-0436e76c70a215df4) | 0 |
+| 11:25:53.9 | Config evaluation recorded: NON_COMPLIANT | 2 min 24 s |
+| 11:26:01.2 | Function started (cold start) | 2 min 31 s |
+| 11:26:03.9 | Incident logged and WOULD REVOKE email sent | 2 min 34 s |
+| 11:26 | Email in the Gmail inbox (minute shown by Gmail) | about 2.5 min |
+| 11:29 | Rule revoked by hand | about 5.5 min |
+
+```
+{"level": "INFO", "message": "sg remediation handled", "action": "WOULD_REVOKE",
+ "sk": "2026-11-18T09:25:53.869Z#sg-0d9ce1febc31da95f", "sg_id": "sg-0d9ce1febc31da95f",
+ "latency_seconds": 7.5}
+REPORT Duration: 2517.47 ms  Billed Duration: 2780 ms  Memory Size: 256 MB
+       Max Memory Used: 115 MB  Init Duration: 261.73 ms
+```
+
+| | 128 MB (17 Nov) | 256 MB (18 Nov) | Change |
+|---|---|---|---|
+| Run time | 4870 ms | 2517 ms | 48% faster |
+| Billed time | 5134 ms | 2780 ms | |
+| Memory used | 111 MB (87%) | 115 MB (45%) | headroom restored |
+| Init duration | 263 ms | 262 ms | unchanged |
+| Compute billed (GB-seconds) | 0.642 | 0.695 | about the same cost |
+| Verdict to email sent | 11.4 s | 10.1 s | |
+| Config: change to verdict | 2 min 30 s | 2 min 24 s | still the slow link |
+
+What it shows:
+
+1. **Doubling memory roughly halved the run time at about the same cost.** Lambda bills memory multiplied by time, so twice the memory for half the time costs nearly the same. The gain is in the function's own work (API calls, email); start-up (Init) did not change.
+2. **Memory pressure is gone.** 45% used instead of 87%.
+3. **The end-to-end number barely moved** (2 min 42 s to 2 min 34 s), because Config still takes about 2.5 minutes. Faster detection has to come from the CloudTrail follow-up, not from the function.
+4. **The email reached the inbox within the same minute it was sent.** Gmail only shows the minute, so the delivery delay is under 60 s but not measured more precisely.
+
 ## Follow-up
 
-- [ ] Raise remediator memory to 256 MB and compare cold-start duration (cost is still fractions of a cent)
+- [x] Raise remediator memory to 256 MB and compare cold-start duration: done 18 Nov (PR #21), run time 4.9 s to 2.5 s, see the re-run above
 - [ ] Alarm on dead-letter queue depth (Phase 4)
 - [ ] Near-real-time CloudTrail alert on `AuthorizeSecurityGroupIngress`, so the change itself is seen before Config's verdict
 - [ ] Stage 2 (live revoke) after two weeks of dry run with zero false positives (D-020)
