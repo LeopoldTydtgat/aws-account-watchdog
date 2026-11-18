@@ -68,6 +68,18 @@ Trusted by: GitHub OIDC, only for this repo's main branch and production environ
 
 Blast radius: the largest in the project. Anyone who could run a workflow on main with the production environment could change any non-IAM resource and any watchdog-* role. Mitigations: OIDC trust pinned to numeric repo and owner IDs, branch protection on main, and a required manual approval before every apply (D-009).
 
+## watchdog-github-drift (Hello World)
+
+Trusted by: GitHub OIDC, only for jobs in this repo's drift-check environment, which only the main branch can use (D-022).
+
+| Permission | Resource | Why |
+|---|---|---|
+| ReadOnlyAccess (AWS managed) | * | terraform plan refreshes every resource in the stack and reads the state file |
+
+Not granted: any write, including the state lock file (the plan runs with -lock=false). ReadOnlyAccess does not include kms:Decrypt, so SecureString parameters stay unreadable.
+
+Blast radius: read most of the account's configuration and the Terraform state. No changes of any kind. It reads more widely than any other role, which is why only one environment may use it.
+
 ## watchdog-cloudtrail-to-cloudwatch (management account)
 
 Trusted by: cloudtrail.amazonaws.com.
