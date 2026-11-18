@@ -1,0 +1,117 @@
+name: Drift check
+
+# Every night, compare the real AWS account with the Terraform code.
+# Any difference means someone changed something outside the pipeline.
+# The code is the source of truth, so a difference opens a GitHub issue
+# with the plan output and fails the run (D-022).
+
+on:
+  schedule:
+    # 01:00 UTC is 03:00 SAST: quiet hours, before the 06:00 cost report.
+    - cron: "0 1 * * *"
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+  issues: write
+
+concurrency:
+  group: drift-check
+  cancel-in-progress: false
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    # The drift role only trusts this environment, and the environment
+    # only allows the main branch. No reviewer: it must run unattended.
+    environment: drift-check
+    defaults:
+      run:
+        working-directory: terraform
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          # Plain terraform, so the exit code below is Terraform's own.
+          terraform_wrapper: false
+
+      - name: Configure AWS credentials via OIDC (read only)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DRIFT_ROLE_ARN }}
+          aws-region: eu-north-1
+
+      - name: Terraform init
+        run: terraform init -input=false
+
+      # -detailed-exitcode: 0 = no changes, 1 = error, 2 = changes (drift).
+      # -lock=false: the read-only role cannot write the lock file, and a
+      # plan that changes nothing does not need the lock.
+      - name: Terraform plan
+        id: plan
+        run: |
+          set +e
+          terraform plan -detailed-exitcode -lock=false -input=false -no-color > plan.txt 2>&1
+          code=$?
+          set -e
+          echo "exitcode=$code" >> "$GITHUB_OUTPUT"
+          tail -n 40 plan.txt
+          if [ "$code" -eq 1 ]; then
+            echo "::error::terraform plan failed, see the log above"
+            exit 1
+          fi
+
+      - name: Build issue text
+        if: steps.plan.outputs.exitcode == '2'
+        run: |
+          account=$(aws sts get-caller-identity --query Account --output text)
+          run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          {
+            echo "The nightly drift check found differences between the AWS account and the Terraform code."
+            echo ""
+            echo "Run: $run_url"
+            echo ""
+            echo "What to do: find out who changed what (CloudTrail), then either put the change into code through a PR, or re-run the last deploy to put the account back to what the code says."
+            echo ""
+            echo '```'
+            # Only the part that matters, with the account ID and any
+            # email address removed: this repo is public.
+            sed -n '/Terraform will perform the following actions/,/^Plan:/p' plan.txt \
+              | sed "s/${account}/<account-id>/g" \
+              | sed -E 's/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/<email>/g' \
+              | head -c 60000
+            echo '```'
+          } > drift-issue.md
+
+      - name: Open or update the drift issue
+        if: steps.plan.outputs.exitcode == '2'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh label create drift --color B60205 --description "Account differs from Terraform" --force
+          open=$(gh issue list --label drift --state open --json number --jq '.[0].number // empty')
+          if [ -n "$open" ]; then
+            gh issue comment "$open" --body-file drift-issue.md
+          else
+            gh issue create --title "Drift detected" --label drift --body-file drift-issue.md
+          fi
+
+      - name: Close the drift issue once the account matches again
+        if: steps.plan.outputs.exitcode == '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          open=$(gh issue list --label drift --state open --json number --jq '.[0].number // empty' 2>/dev/null || true)
+          if [ -n "$open" ]; then
+            gh issue close "$open" --comment "No drift on run ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}. Account matches the code again."
+          fi
+
+      - name: Fail the run when drift was found
+        if: steps.plan.outputs.exitcode == '2'
+        run: |
+          echo "::error::Drift detected, see the drift issue"
+          exit 1
