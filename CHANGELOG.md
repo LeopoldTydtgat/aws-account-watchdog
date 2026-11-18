@@ -2,6 +2,12 @@
 
 All notable changes to this project, newest first.
 
+## 2026-11-18 - Nightly drift detection live (Phase 3)
+- Two unused security groups left over from console labs deleted by hand (D-017).
+- PR #27: watchdog-github-drift role, read only, usable only from the drift-check GitHub environment (Deploy #18). The environment and its secret were set up by hand (D-017).
+- PR #28: nightly drift check at 03:00 SAST plus manual runs. Drift opens a GitHub issue with the plan (account ID and email addresses removed) and fails the run; a clean run closes the issue (D-022). First run: no changes.
+- Game Day 04 (docs/game-days/game-day-04.md): port 8080 opened by hand on the test range, caught by the drift check, put back by re-running the deploy, issue closed itself.
+
 ## 2026-11-18 - Weekly housekeeper live (Phase 3)
 - PR #23: watchdog-housekeeper role (read only: no stop, delete or tag) and log group.
 - PR #24: watchdog-housekeeper function, Mondays 06:30 SAST. Reports unattached disks, stopped servers, idle public IPs, snapshots older than 30 days and resources missing the project or owner tag (D-021). 16 new unit tests.

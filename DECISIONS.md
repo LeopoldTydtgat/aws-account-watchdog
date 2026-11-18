@@ -215,6 +215,8 @@ Everything below was changed by hand in the console or CLI. None of it is in cod
 | 2026-10-14 | SES email identity verified in eu-north-1 (account stays in the SES sandbox) | Hello World | The cost report sends from and to this one address. The identity ARN contains the address, so it stays out of code (D-015) |
 | 2026-10-14 | SSM parameter /watchdog/report-email (String) | Hello World | The Lambda reads the address at runtime, so it never appears in code or pipeline output (D-015). String, not SecureString: an address is not a secret, and SecureString would need KMS decrypt on the role |
 | 2026-11-17 | Service-linked role AWSServiceRoleForConfig created (`aws iam create-service-linked-role --aws-service-name config.amazonaws.com`) | Hello World | Config's recorder needs it. The pipeline role can only manage watchdog-* roles, so Terraform references this role by ARN and may only pass it to config.amazonaws.com (D-019) |
+| 2026-11-18 | Security groups lab-web-access (sg-0c76e72184c888e0d) and launch-wizard-1 (sg-0b215e7fcfa5bd885) deleted | Hello World, default VPC | Left over from earlier console labs, attached to nothing. Found by the housekeeper's live test (D-021) |
+| 2026-11-18 | GitHub environment drift-check (deployment branches: main only, no reviewer) and its secret AWS_DRIFT_ROLE_ARN | GitHub repo settings | The drift role trusts only this environment (D-022). GitHub settings are not in Terraform |
 
 Corrections to earlier entries: D-004's region is now a choice, not forced; the region lock is my own SCP (p-soifw7zx), kept deliberately. D-005's note that Cost Anomaly Detection and Access Analyzer are unavailable no longer holds; both are live.
 
@@ -304,3 +306,30 @@ Delivery: role and log group first (PR #23), function and schedule second (PR #2
 Alternatives rejected: AWS Trusted Advisor cost checks (full checks need a Business support plan); AWS Config with the required-tags managed rule (would mean recording every resource type, which Config bills per item, against the security-groups-only scope in D-019); auto-deleting old snapshots (irreversible, and a person should decide).
 
 Proof: live test 18 Nov. 12:31 run found the two hand-made security groups missing tags; with an untagged 1 GiB test volume added, the next run reported 4 findings (the volume as unattached and as untagged). The volume was then deleted.
+
+## D-022: Nightly drift detection, read only and report only (2026-11-18)
+
+Decision: GitHub Actions workflow `.github/workflows/drift.yml` runs `terraform plan -detailed-exitcode` against the Hello World stack every night at 01:00 UTC (03:00 SAST), and on demand. No changes: the run passes and closes any open drift issue. Changes: it opens a GitHub issue labelled `drift` with the change section of the plan (or comments on the one already open) and fails the run. It never applies anything.
+
+Choices and why:
+
+- Its own role, watchdog-github-drift, with the AWS managed ReadOnlyAccess policy. A plan only reads. Borrowing the deploy role (PowerUserAccess plus watchdog-* IAM, see docs/iam-matrix.md) would make an unattended nightly job the most powerful credential in the project.
+- Trust scoped to one GitHub environment, drift-check, which only main can use and which has no reviewer, so it can run while nobody is watching. The deploy role trusts the production environment, which needs approval. Neither role accepts the other's jobs.
+- `-lock=false`. The read-only role cannot write the lock file in the state bucket, and a plan that writes nothing does not need the lock. If a deploy runs at the same moment, the worst case is one stale drift report.
+- Report only, no automatic revert. A console change can be a genuine emergency fix that belongs in code. Putting the account back is a separate, approved step: re-run the latest Deploy run, or a PR that adopts the change.
+- The issue text is scrubbed: the account ID and anything shaped like an email address are replaced, and only the change section of the plan is kept. The repo is public.
+- One open drift issue at a time. Repeat findings comment on it and a clean run closes it, so the closed issues are the drift history.
+- `terraform_wrapper: false`, so the exit code is Terraform's own. The wrapper action rewrites exit codes.
+
+Known limits:
+
+- `terraform/org` (the management-account stack, applied locally, D-014) is not checked. The drift role lives in Hello World and has no access there.
+- A plan only compares resources Terraform already manages. Something created by hand that Terraform has never heard of is invisible to it. The housekeeper's tag check (D-021) is the net for those.
+- Nothing outside Terraform is checked: the manual changes in D-017 and GitHub's own settings.
+- Detection time is set by the schedule: up to 24 hours. Fast detection of dangerous security-group changes is Config's job (D-019).
+
+Alternatives rejected: running the check with the deploy role (above); applying automatically on drift (above); a hosted Terraform platform's drift feature (moves the state and the runs off this account and repo for something one workflow does).
+
+Delivery: role first (PR #27, Deploy #18), workflow second (PR #28), same ordering as D-020.
+
+Proof: first manual run reported no changes. Game Day 04 (docs/game-days/game-day-04.md): port 8080 opened by hand at 14:47:34, issue #29 opened at 14:49:05, account put back through the pipeline at 14:52:34, issue closed itself at 14:53:58.
